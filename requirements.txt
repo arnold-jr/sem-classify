@@ -1,0 +1,6 @@
+nose
+sphinx
+numpy
+scipy
+pil
+pandas
