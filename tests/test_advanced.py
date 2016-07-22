@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 
-from .context import sem_build_db
+from .context import semclassify
 
 import unittest
 
 
 class AdvancedTestSuite(unittest.TestCase):
-    """Advanced test cases."""
+  """Advanced test cases."""
 
-    def test_thoughts(self):
-        sem_build_db.hmm()
+  def test_thoughts(self):
+    with semclassify.stopwatch("testing"):
+      pass
 
 
 if __name__ == '__main__':
-    unittest.main()
+  unittest.main()

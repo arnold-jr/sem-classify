@@ -16,10 +16,19 @@ def stopwatch(message):
 
 
 def make_input_json():
+  """ Creates a JSON-like dict specifying the construction of the database
+  building job.
+
+  This is a helper function for specifying a DB construction control
+  file, but eventually, this should be generated with a GUI. An actual JSON
+  file is generated as record of the job.
+
+  :return control-file JSON-like dict
+  """
   root = "/Users/joshuaarnold/Documents/Papers/VU_SEM/analysis/SEM-EDX-DATA"
   matDirs = os.listdir(root)
 
-  matList = {'materials':
+  ctrlDict = {'materials':
             [{'name':m, 'path':os.path.join(root, m),
             'sites':[
                     {'name':s, 'path': os.path.join(root,m,s),
@@ -29,14 +38,38 @@ def make_input_json():
                          'type':'EDX' if i.split(".")[-1] == 'tsv' else 'BSE',
                          'maskName': i.split(".")[0]
                               if i.split(".")[-1].lower() == "tif"  and
-                                i.split(".") not in ["inca","aztec"] else None
+                                i.split(".")[0] not in ["inca","aztec"]
+                              else None
                         } for i in os.listdir(os.path.join(root,m,s,'TSV-TIFF'))
-                        if i.split(".")[1] in ["tsv","tiff"]
+                        if i.split(".")[1] in ["tsv", "tif", "tiff"]
                       ]
                      } for s in os.listdir(os.path.join(root, m)) if 'soi' in s
                     ]
               } for m in matDirs if m in ['BFS']
             ] }
 
-  return matList
+  with open('../input_data/ctrl_00.json','w') as f:
+    json.dump(ctrlDict, f, indent=2)
+
+  return ctrlDict
+
+def get_input_json(fileName):
+  """ Creates a nested dict from the input JSON file.
+
+  :param fileName: absolute path of the JSON input file
+  :return control dict structure
+  """
+  with open(fileName, "r") as f:
+    try:
+      ctrlDict = json.load(f)
+      return ctrlDict
+    except:
+      print("Error: Input JSON file could not be read.")
+      raise
+
+if __name__ == "__main__":
+  make_input_json()
+  print json.dumps(get_input_json("../input_data/ctrl_00.json"),indent=2)
+
+
 
