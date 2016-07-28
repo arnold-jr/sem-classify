@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from helpers import *
 import numpy as np
-from scipy.ndimage import imread
 import pandas as pd
+from scipy.ndimage import imread
 from itertools import groupby
 
 class Material():
@@ -154,15 +154,12 @@ def write_db(ctrlFilePath, storePath):
   """
   ctrlDict = get_input_json(ctrlFilePath)
   matList = get_material_list(ctrlDict)
-  df = matList[0].get_db()
-  for m in matList[1:]:
-    df = df.append(df)
-
-  print df.info()
-  print df.head()
-
   with stopwatch('writing to HDF5 store'):
-    df.to_hdf(storePath,'df')
+    with pd.HDFStore(storePath,'w') as store:
+      for mat in matList:
+        chunk = mat.get_db()
+        store.append(mat.name, chunk)
+
 
 
 
