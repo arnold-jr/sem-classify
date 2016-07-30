@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-from helpers import *
+from semclassify import helpers as h
 import numpy as np
 import pandas as pd
-from scipy.ndimage import imread
+from skimage import io
 from itertools import groupby
+import json
+import os
 
 class Material():
   def __init__(self, name, path, sites):
@@ -18,7 +20,7 @@ class Material():
     self.sites = sites
 
   def get_db(self):
-    with stopwatch("creating DataFrame for material %s" % self.name):
+    with h.stopwatch("creating DataFrame for material %s" % self.name):
       df = pd.DataFrame()
       for s in self.sites:
         df = df.append(s.get_image_block())
@@ -53,27 +55,16 @@ class Site():
     """
     imgs = {i.name if i.maskName is None else i.maskName:i.get_image()
             for i in self.images}
-    maxRes = max((i.shape for i in imgs.itervalues()))
+    maxRes = max((i.shape for i in imgs.values()))
     rr, cc = np.mgrid[0:maxRes[0], 0:maxRes[1]]
     imgBlock = {'imgRow': rr.astype(np.uint16).flatten(),
                 "imgCol": cc.astype(np.uint16).flatten()}
     imgBlock.update({k:np.resize(v, maxRes).flatten()
-                     for k,v in imgs.iteritems()})
+                     for k,v in imgs.items()})
     df = pd.DataFrame(imgBlock)
 
-    # TODO: Figure out why the coercion isn't taking
-    # Here, set the dtypes of the DataFrame
-    keyfunc = lambda x: x[0]
-    dtypesInv = sorted([(v.dtype, k) for k,v in imgBlock.iteritems()],
-                       key=keyfunc)
-
-    for k, g in groupby(dtypesInv, key=keyfunc):
-      _, glist = zip(*list(g))
-      glist = list(glist)
-      df[glist] = df[glist].astype(k)
-
     df['site'] = self.name
-    return pd.DataFrame(imgBlock)
+    return df
 
   def __str__(self):
     return self.name + "-->" + ",".join(str(x) for x in self.images)
@@ -103,10 +94,11 @@ class Image():
     """
     # TODO: In the future, the imgType may be used for specifying data type
     if self.imgFormat == ".tsv":
-      return np.loadtxt(self.path, dtype=np.float16)
+      return np.loadtxt(self.path, dtype=np.float64)
     else:
       try:
-        im = imread(self.path, flatten=False)
+
+        im = io.imread(self.path, flatten=False)
         if self.maskName is not None:
           return im
         else:
@@ -145,6 +137,7 @@ def get_material_list(dataDict):
                      get_material_list(v))
             for v in dataDict.get("materials")]
 
+
 def write_db(ctrlFilePath, storePath):
   """ Creates a new dataframe from the control file and writes it to disk
 
@@ -152,20 +145,39 @@ def write_db(ctrlFilePath, storePath):
   :param storePath: string specifying absolute path to the HDF5 store to be
   created
   """
-  ctrlDict = get_input_json(ctrlFilePath)
+  ctrlDict = h.get_input_json(ctrlFilePath)
   matList = get_material_list(ctrlDict)
-  with stopwatch('writing to HDF5 store'):
+  with h.stopwatch('writing to HDF5 store'):
     with pd.HDFStore(storePath,'w') as store:
       for mat in matList:
         chunk = mat.get_db()
-        store.append(mat.name, chunk)
+        print(chunk.info())
+        store.append('df', chunk, data_columns=True, index=True)
+
+def query_store(store_path, where=None, columns=None):
+  with h.stopwatch("querying store"):
+    with pd.HDFStore(store_path,'r') as store:
+      return store.select('df',
+                          where=where,
+                          columns=columns)
 
 
-
-
-if __name__ == '__main__':
-
+def actions(choice='read'):
   ctrlFilePath = "../input_data/ctrl_00.json"
   storePath = "../output/store.h5"
 
-  write_db(ctrlFilePath, storePath)
+  if choice == 'read':
+    return query_store(storePath,
+                       where='material=="BFS" & '
+                             'site="soi_001" & '
+                             'BFS!=0',
+                       columns=['Al', 'BSE'])
+  elif choice == 'write':
+    write_db(ctrlFilePath, storePath)
+  else:
+    raise NameError("Unrecognized option.")
+
+
+if __name__ == '__main__':
+  # print(actions('write'))
+  print(actions('read'))

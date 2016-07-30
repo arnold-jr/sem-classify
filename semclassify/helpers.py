@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
 import contextlib
 import time
 import json
 import os
-import pprint
 
 @contextlib.contextmanager
 def stopwatch(message):
@@ -12,7 +12,7 @@ def stopwatch(message):
     yield
   finally:
     t1 = time.time()
-    print('Total elapsed time for %s: %.3f s' % (message, t1 - t0))
+    print('Total elapsed time for %s: %f s' % (message, t1 - t0))
 
 
 def make_input_json():
@@ -67,9 +67,14 @@ def get_input_json(fileName):
       print("Error: Input JSON file could not be read.")
       raise
 
+
 if __name__ == "__main__":
-  make_input_json()
-  print json.dumps(get_input_json("../input_data/ctrl_00.json"),indent=2)
+  # make_input_json()
+  # print(json.dumps(get_input_json("../input_data/ctrl_00.json"),indent=2))
+  with stopwatch('hello',n_iter=1):
+    print("hello")
+  with stopwatch('hello',n_iter=1000000):
+    print("hello")
 
 
 
