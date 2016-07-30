@@ -14,6 +14,26 @@ def stopwatch(message):
     t1 = time.time()
     print('Total elapsed time for %s: %f s' % (message, t1 - t0))
 
+def chunks(l, n):
+  """ Yield successive n-sized chunks from l.
+
+  :param l: list
+  :param n: number of elements in chunk
+  :return iterator of size n
+  """
+  for i in range(0, len(l), n):
+    yield l[i:i + n]
+
+def full_head(df):
+  """ Prints entire DataFrame head, avoiding ellision in the normal
+  DataFrame.head() function.
+
+  :param df: pandas DataFrame instance
+  :return None
+  """
+  for l in list(chunks(df.columns.values,8)):
+    print(df[l].head())
+
 
 def make_input_json():
   """ Creates a JSON-like dict specifying the construction of the database
