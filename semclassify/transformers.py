@@ -11,4 +11,4 @@ class ColumnSelectorTransformer(BaseEstimator, TransformerMixin):
 
   def transform(self, df):
     # return scipy.sparse.csr_matrix(df.loc[:,self.cols].as_matrix())
-    return df.loc[:,self.cols].as_matrix()
+    return df.loc[:,self.cols].astype(np.float64).as_matrix()

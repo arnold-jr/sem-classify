@@ -16,7 +16,7 @@ setup(
     long_description=readme,
     author='Joshua Arnold',
     author_email='j.arnold.111@gmail.com',
-    url='https://github.com/arnold-jr/',
+    url='https://github.com/arnold-jr/sem-classify',
     license=license,
     packages=find_packages(exclude=('tests', 'docs'))
 )

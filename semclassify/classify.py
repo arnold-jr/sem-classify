@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from semclassify import helpers as h
-from semclassify import transformers as t
+from semclassify.helpers import stopwatch
+from semclassify.transformers import ColumnSelectorTransformer
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
@@ -17,10 +17,16 @@ import dill as pickle
 
 
 class SuperModel():
-  def __init__(self, feat_cols, obs_col):
+  def __init__(self, store_path, feat_cols, label_col):
+    self.store_path = store_path
     self.feat_cols = feat_cols
-    self.obs_col = obs_col
-    self.chunk = pd.DataFrame()
+    try:
+      self.label_col = label_col
+      if len(label_col) != 1:
+        raise ValueError("Incorrect parameter for SuperModel.label_col")
+    except:
+      raise
+
     self.modelChoices = dict(
       logit=dict(model=LogisticRegression(
         class_weight='balanced',
@@ -47,7 +53,7 @@ class SuperModel():
         metric='minkowski',
         metric_params=None,
       ),
-        param_grid={'n_neighbors': range(1,8,2)}
+        param_grid={'n_neighbors': list(range(1,8,2))}
       ),
       dtc=dict(model=DecisionTreeClassifier(
         criterion='gini',
@@ -62,7 +68,7 @@ class SuperModel():
         class_weight=None,
         presort=False,
       ),
-        param_grid={'min_samples_split': range(2, 5)}
+        param_grid={'min_samples_split': list(range(2, 5))}
       ),
       rfc=dict(model=RandomForestClassifier(
         n_estimators=10,
@@ -80,7 +86,7 @@ class SuperModel():
         warm_start=False,
         class_weight=None,
       ),
-        param_grid={"rf__min_samples_split": range(2, 5)}
+        param_grid={"min_samples_split": list(range(2, 5))}
       ),
       etc=dict(model=ExtraTreesClassifier(
         n_estimators=10,
@@ -105,49 +111,74 @@ class SuperModel():
                ),
     )
 
-  def train_model(self, model_name, model_choice):
+  def train_model(self, chunk, model_name, model_choice, all_classes=None):
 
     model_pipe = Pipeline([
       ('features', FeatureUnion(
-        [('numeric', t.ColumnSelectorTransformer(self.feat_cols)),]
+        [('numeric', ColumnSelectorTransformer(self.feat_cols)),]
       )),
       ('scaler', StandardScaler()),
       ('model', model_choice['model']),
     ])
 
-    y = self.chunk.loc[:,self.obs_col]
+    y = chunk.loc[:, self.label_col].as_matrix().ravel()
 
-    cv = StratifiedShuffleSplit(len(y), n_iter=5, test_size=0.3)
+    cv = StratifiedShuffleSplit(y, n_iter=5, test_size=0.3)
     clf_CV = GridSearchCV(model_pipe,
                           param_grid={'model__'+k:v
                                       for k,v in
-                                      model_choice['param_grid'].iteritems()},
+                                      model_choice['param_grid'].items()},
                           cv=cv,
                           n_jobs=1)
-    clf_CV.fit(self.chunk, y)
+    if True:
+      clf_CV.fit(chunk, y)
+    else:
+      clf_CV.partial_fit(chunk, y, all_classes)
 
     print(model_choice['model'])
-    print(model_name, clf_CV.best_score_, clf_CV.best_params_)
+    print('Model: %s\t Score: %f\t' % (model_name, clf_CV.best_score_))
+    print('Parameters: ', clf_CV.best_params_)
 
+    '''
     with open(self.get_pickled_name(model_name),
               'wb') as pckl_output:
       pickle.dump(clf_CV.best_estimator_, pckl_output)
+    '''
 
 
-  def train_all_models(self, overwrite=False, model_names=['rff', 'knn']):
-    with h.stopwatch('retrieving DataFrame'):
-      if overwrite:
-        self.chunk = self.create_hdf5_store()
-      self.chunk = pd.read_hdf(self.fpath.replace(".csv",".h5")).sample(1000)
+  def train_all_models(self, model_names=('dtc')):
+    """ Trains all the classifiers specified by their model name.
 
-    for modelName, modelValues in self.modelChoices.iteritems():
-      if modelName not in model_names:
-        continue
-      with h.stopwatch('training model %s' % modelName):
-        self.train_model(modelName, modelValues)
+    :param model_names: list of model code names as strings
+    :return None
+    """
+    where = 'site="soi_001"'
+    df_labels = pd.read_hdf(self.store_path,
+                            'df',
+                            where=where,
+                            columns=self.label_col
+                            )
+    all_classes = np.unique(df_labels)
+    n_rows = len(df_labels.index)
+    chunksize = n_rows
+
+    for chunk_iter in pd.read_hdf(self.store_path,
+                             'df',
+                             chunksize=chunksize,
+                             where=where,
+                             columns=self.feat_cols + self.label_col):
+      for modelName, modelValues in self.modelChoices.items():
+        if modelName not in model_names:
+          continue
+        with stopwatch('training model %s' % modelName):
+          chunk = chunk_iter
+          self.train_model(chunk, modelName, modelValues, all_classes)
+          print(chunk)
+
 
   def get_pickled_name(self, model_name):
     return self.fpath.replace(".csv","_" + model_name + ".dpkl")
+
 
   def get_trained_model(self, model_name):
     with open(self.get_pickled_name(model_name), 'rb') \
@@ -166,4 +197,8 @@ class SuperModel():
     df_out.to_csv(test_fpath.replace(".csv","_results.csv"))
 
 if __name__ == "__main__":
-  pass
+  sm = SuperModel(
+    "/Users/joshuaarnold/Documents/MyApps/sem-classify/output/store.h5",
+    ['BSE'],
+    ['BFS'])
+  sm.train_all_models()

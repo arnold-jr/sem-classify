@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
-from semclassify import helpers as h
+from .helpers import stopwatch, get_input_json
 import numpy as np
 import pandas as pd
 from skimage import io
-from itertools import groupby
-import json
 import os
 
 class Material():
@@ -20,7 +18,7 @@ class Material():
     self.sites = sites
 
   def get_db(self):
-    with h.stopwatch("creating DataFrame for material %s" % self.name):
+    with stopwatch("creating DataFrame for material %s" % self.name):
       df = pd.DataFrame()
       for s in self.sites:
         df = df.append(s.get_image_block())
@@ -145,39 +143,23 @@ def write_db(ctrlFilePath, storePath):
   :param storePath: string specifying absolute path to the HDF5 store to be
   created
   """
-  ctrlDict = h.get_input_json(ctrlFilePath)
+  ctrlDict = get_input_json(ctrlFilePath)
   matList = get_material_list(ctrlDict)
-  with h.stopwatch('writing to HDF5 store'):
+  with stopwatch('writing to HDF5 store'):
     with pd.HDFStore(storePath,'w') as store:
       for mat in matList:
         chunk = mat.get_db()
         print(chunk.info())
         store.append('df', chunk, data_columns=True, index=True)
 
-def query_store(store_path, where=None, columns=None):
-  with h.stopwatch("querying store"):
-    with pd.HDFStore(store_path,'r') as store:
-      return store.select('df',
-                          where=where,
-                          columns=columns)
-
-
-def actions(choice='read'):
-  ctrlFilePath = "../input_data/ctrl_00.json"
-  storePath = "../output/store.h5"
-
-  if choice == 'read':
-    return query_store(storePath,
-                       where='material=="BFS" & '
-                             'site="soi_001" & '
-                             'BFS!=0',
-                       columns=['Al', 'BSE'])
-  elif choice == 'write':
-    write_db(ctrlFilePath, storePath)
-  else:
-    raise NameError("Unrecognized option.")
-
 
 if __name__ == '__main__':
   # print(actions('write'))
-  print(actions('read'))
+  store_path = "../output/store.h5"
+  with stopwatch("querying store"):
+    for df in pd.read_hdf(store_path, 'df', chunksize=None,
+                     where='material=="BFS" & '
+                           'site="soi_001" & '
+                           'BFS!=0',
+                     columns=['Al', 'BSE']):
+      print(df)
