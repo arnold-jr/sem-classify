@@ -65,7 +65,7 @@ def make_input_json():
                       ]
                      } for s in os.listdir(os.path.join(root, m)) if 'soi' in s
                     ]
-              } for m in matDirs if m in ['BFS']
+              } for m in matDirs if m in ['BFS','FAF']
             ] }
 
   with open('../input_data/ctrl_00.json','w') as f:
@@ -89,12 +89,8 @@ def get_input_json(fileName):
 
 
 if __name__ == "__main__":
-  # make_input_json()
-  # print(json.dumps(get_input_json("../input_data/ctrl_00.json"),indent=2))
-  with stopwatch('hello',n_iter=1):
-    print("hello")
-  with stopwatch('hello',n_iter=1000000):
-    print("hello")
+  make_input_json()
+  print(json.dumps(get_input_json("../input_data/ctrl_00.json"),indent=2))
 
 
 

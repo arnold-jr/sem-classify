@@ -21,13 +21,22 @@ import dill as pickle
 
 
 class SuperModel():
-  def __init__(self, store_path, feat_cols, label_col):
+  def __init__(self, store_path, tables, feat_cols, label_cols):
+    """ Constructs an instance of SuperModel which associates a data store,
+    data columns of interest, and a set of models to describe the data.
+
+    :param store_path: string specifying path to HDF5 store
+    :param tables: list of strings specifying table names in the HDF store
+    :param feat_cols: list of feature columns as strings
+    :param label_cols: list of label columns as strings
+    """
     self.store_path = store_path
+    self.tables = tables
     self.feat_cols = feat_cols
     try:
-      self.label_col = label_col
-      if len(label_col) != 1:
-        raise ValueError("Incorrect parameter for SuperModel.label_col")
+      self.label_cols = label_cols
+      if len(label_cols) < 1:
+        raise ValueError("Incorrect parameter for SuperModel.label_cols")
     except:
       raise
 
@@ -117,23 +126,62 @@ class SuperModel():
       logit=dict(model=SGDClassifier(loss='log'))
     )
 
+  def get_pickled_name(self, model_name):
+    """ Returns a transformation of a name for a pickled model.
+
+    :param model_name: unique id of a trained model
+    :return path to the model
+    """
+    return self.store_path.replace(".h5","_" + model_name + ".dpkl")
+
+
+  def pickle_models(self, model_names):
+    """ Pickles selected models using the dill package.
+
+    :return None
+    """
+    for model_name in model_names:
+      with open(self.get_pickled_name(model_name),
+                'wb') as pckl_output:
+        pickle.dump(self.modelChoices[model_name]['model'], pckl_output)
+
+
+
+  def get_trained_model(self, model_name):
+    with open(self.get_pickled_name(model_name), 'rb') \
+        as pckl_input:
+      return pickle.load(pckl_input)
+
+
+  def test_models(self, model_names, test_fpath):
+    df_out = pd.DataFrame()
+    for model_name in model_names:
+      df = self.create_data_frame(test_fpath, train=False)
+      clf = self.get_trained_model(model_name)
+      df_out[model_name] = clf.predict(df)
+
+    print(df_out)
+    df_out.to_csv(test_fpath.replace(".csv","_results.csv"))
+
+
   def train_model(self, chunk, model_name, model_values, all_classes=None):
 
     feature_steps = [
       ('features', FeatureUnion([
         ('numeric', ColumnSelectorTransformer(self.feat_cols)),
       ])
-      ),
+       ),
       ('scaler', StandardScaler()),
     ]
 
     feature_pipe = Pipeline(feature_steps)
 
     model_pipe = Pipeline(feature_steps +
-                               [('model', model_values['model'])]
+                          [('model', model_values['model'])]
                           )
 
-    y = chunk.loc[:, self.label_col].as_matrix().ravel()
+    # TODO: combine all labels into a single label
+    y = chunk.loc[:, self.label_cols].as_matrix().ravel()
 
     cv = StratifiedShuffleSplit(y, n_iter=5, test_size=0.3)
 
@@ -173,73 +221,38 @@ class SuperModel():
     """
     # where = 'site="soi_001"'
     where = None
-    df_labels = pd.read_hdf(self.store_path,
-                            'df',
-                            where=where,
-                            columns=self.label_col
-                            )
-    all_classes = np.unique(df_labels)
-    n_rows = len(df_labels.index)
-    chunksize = n_rows // 10
+    with pd.HDFStore(self.store_path, mode='r') as store:
+      df_labels = store.select(self.tables[0],
+                               where=where,
+                               columns=self.label_cols
+                               )
+      # TODO: combine labels into a single series
+      all_classes = np.unique(df_labels)
+      n_rows = len(df_labels.index)
+      chunksize = n_rows // 10
 
-    for chunk in pd.read_hdf(self.store_path,
-                             'df',
-                             chunksize=chunksize,
-                             where=where,
-                             columns=self.feat_cols + self.label_col):
-      for modelName, modelValues in self.modelChoices.items():
-        if modelName not in model_names:
-          continue
-        with stopwatch('training model %s' % modelName):
-          modelValues.update(
-            dict(model=self.train_model(chunk,
-                                        modelName,
-                                        modelValues,
-                                        all_classes)
-                 )
-          )
-
-
-  def get_pickled_name(self, model_name):
-    """ Returns a transformation of a name for a pickled model.
-
-    :param model_name: unique id of a trained model
-    :return path to the model
-    """
-    return self.store_path.replace(".h5","_" + model_name + ".dpkl")
+      for chunk in store.select(self.tables[0],
+                                chunksize=chunksize,
+                                where=where,
+                                columns=self.feat_cols + self.label_cols):
+        for modelName, modelValues in self.modelChoices.items():
+          if modelName not in model_names:
+            continue
+          with stopwatch('training model %s' % modelName):
+            modelValues.update(
+              dict(model=self.train_model(chunk,
+                                          modelName,
+                                          modelValues,
+                                          all_classes)
+                   )
+            )
 
 
-  def pickle_models(self, model_names):
-    """ Pickles selected models using the dill package.
-
-    :return None
-    """
-    for model_name in model_names:
-      with open(self.get_pickled_name(model_name),
-                'wb') as pckl_output:
-        pickle.dump(self.modelChoices[model_name]['model'], pckl_output)
-
-
-
-  def get_trained_model(self, model_name):
-    with open(self.get_pickled_name(model_name), 'rb') \
-        as pckl_input:
-      return pickle.load(pckl_input)
-
-
-  def test_models(self, model_names, test_fpath):
-    df_out = pd.DataFrame()
-    for model_name in model_names:
-      df = self.create_data_frame(test_fpath, train=False)
-      clf = self.get_trained_model(model_name)
-      df_out[model_name] = clf.predict(df)
-
-    print(df_out)
-    df_out.to_csv(test_fpath.replace(".csv","_results.csv"))
 
 if __name__ == "__main__":
   sm = SuperModel(
     "/Users/joshuaarnold/Documents/MyApps/sem-classify/output/store.h5",
-    ['Al','Si','Ca','S','BSE'],
+    ['BFS','FAF'],
+    ['Al','Ca','Fe','K','Na','S','Si'],
     ['BFS'])
   sm.train_all_models()

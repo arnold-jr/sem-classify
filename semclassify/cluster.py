@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.metrics import silhouette_score
 from semclassify import helpers as h
-from semclassify import core
+from semclassify import dbtools
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -115,9 +115,9 @@ def hotel2(X1, X2):
 
 if __name__ == "__main__":
   columns = ['BSE', 'Ca', 'Si', 'Al']
-  df = core.query_store("../output/store.h5",
-                   where='site="soi_001" & BFS!=0',
-                   columns=columns)
+  df = dbtools.query_store("../output/store.h5",
+                           where='site="soi_001" & BFS!=0',
+                           columns=columns)
 
   df.loc[:,'kmeans'] = get_best_clustering(df, n_clusters_range=range(2,3))
 

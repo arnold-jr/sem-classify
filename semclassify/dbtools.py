@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from .helpers import stopwatch, get_input_json
+from semclassify.helpers import stopwatch, get_input_json, make_input_json
 import numpy as np
 import pandas as pd
 from skimage import io
@@ -17,7 +17,7 @@ class Material():
     self.path = path
     self.sites = sites
 
-  def get_db(self):
+  def get_dataframe(self):
     with stopwatch("creating DataFrame for material %s" % self.name):
       df = pd.DataFrame()
       for s in self.sites:
@@ -96,11 +96,11 @@ class Image():
     else:
       try:
 
-        im = io.imread(self.path, flatten=False)
+        im = io.imread(self.path, flatten=True)
         if self.maskName is not None:
-          return im
-        else:
           return im.astype(np.bool)
+        else:
+          return im
 
       except:
         print("Error: image file %s could not be loaded" % self.path)
@@ -148,18 +148,11 @@ def write_db(ctrlFilePath, storePath):
   with stopwatch('writing to HDF5 store'):
     with pd.HDFStore(storePath,'w') as store:
       for mat in matList:
-        chunk = mat.get_db()
+        chunk = mat.get_dataframe()
         print(chunk.info())
-        store.append('df', chunk, data_columns=True, index=True)
+        store.append(mat.name, chunk, data_columns=True, index=True)
 
 
 if __name__ == '__main__':
-  # print(actions('write'))
-  store_path = "../output/store.h5"
-  with stopwatch("querying store"):
-    for df in pd.read_hdf(store_path, 'df', chunksize=None,
-                     where='material=="BFS" & '
-                           'site="soi_001" & '
-                           'BFS!=0',
-                     columns=['Al', 'BSE']):
-      print(df)
+  make_input_json()
+  write_db('../input_data/ctrl_00.json','../output/store.h5')
