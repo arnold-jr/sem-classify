@@ -2,11 +2,10 @@ import pandas as pd
 import numpy as np
 from semclassify.helpers import stopwatch
 from semclassify.transformers import ColumnSelectorTransformer
-from sklearn.pipeline import Pipeline, FeatureUnion, make_pipeline
+from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import (SGDClassifier,
                                   Perceptron,
-                                  LogisticRegression,
                                   PassiveAggressiveClassifier)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.neighbors import KNeighborsClassifier

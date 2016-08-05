@@ -95,13 +95,11 @@ class Image():
       return np.loadtxt(self.path, dtype=np.float64)
     else:
       try:
-
         im = io.imread(self.path, flatten=True)
         if self.maskName is not None:
           return im.astype(np.bool)
         else:
           return im
-
       except:
         print("Error: image file %s could not be loaded" % self.path)
         raise

@@ -4,6 +4,7 @@ import time
 import json
 import os
 
+
 @contextlib.contextmanager
 def stopwatch(message):
   """Context manager that prints how long a block takes to execute."""
@@ -45,28 +46,31 @@ def make_input_json():
 
   :return control-file JSON-like dict
   """
-  root = "/Users/joshuaarnold/Documents/Papers/VU_SEM/analysis/SEM-EDX-DATA"
-  matDirs = os.listdir(root)
+  parent = "/Users/joshuaarnold/Documents/Papers/VU_SEM/analysis/SEM-EDX-DATA"
+  matDirs = os.listdir(parent)
 
   ctrlDict = {'materials':
-            [{'name':m, 'path':os.path.join(root, m),
-            'sites':[
-                    {'name':s, 'path': os.path.join(root,m,s),
-                      'images':[
-                        {'name':i.split(".")[0],
-                         'path': os.path.join(root,m,s,'TSV-TIFF',i),
-                         'type':'EDX' if i.split(".")[-1] == 'tsv' else 'BSE',
-                         'maskName': i.split(".")[0]
-                              if i.split(".")[-1].lower() == "tif"  and
-                                i.split(".")[0] not in ["inca","aztec"]
-                              else None
-                        } for i in os.listdir(os.path.join(root,m,s,'TSV-TIFF'))
-                        if i.split(".")[1] in ["tsv", "tif", "tiff"]
-                      ]
-                     } for s in os.listdir(os.path.join(root, m)) if 'soi' in s
+                [{'name': m, 'path': os.path.join(parent, m),
+                  'sites': [
+                    {'name': s, 'path': os.path.join(parent, m, s),
+                     'images': [
+                       {'name': i.split(".")[0],
+                        'path': os.path.join(parent, m, s, 'TSV-TIFF', i),
+                        'type': 'EDX' if i.split(".")[-1] == 'tsv' else 'BSE',
+                        'maskName': i.split(".")[0]
+                        if i.split(".")[-1].lower() == "tif" and
+                           i.split(".")[0] not in ["inca", "aztec"]
+                        else None
+                        } for i in
+                       os.listdir(os.path.join(parent, m, s, 'TSV-TIFF'))
+                       if i.split(".")[1] in ["tsv", "tif", "tiff"]
+                       ]
+                     } for s in os.listdir(os.path.join(parent, m)) if
+                    'soi' in s
                     ]
-              } for m in matDirs if m in ['BFS','FAF']
-            ] }
+                  } for m in matDirs if m in ['BFS', 'FAF']
+                 ]
+              }
 
   with open('../input_data/ctrl_00.json','w') as f:
     json.dump(ctrlDict, f, indent=2)
