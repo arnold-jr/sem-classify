@@ -49,6 +49,8 @@ def make_input_json():
   parent = "/Users/joshuaarnold/Documents/Papers/VU_SEM/analysis/SEM-EDX-DATA"
   matDirs = os.listdir(parent)
 
+  mask_names = ["BFS", "FAF", "BG2", "ANH", "HYD", "POR", "ILL", "QS"]
+
   ctrlDict = {'materials':
                 [{'name': m, 'path': os.path.join(parent, m),
                   'sites': [
@@ -58,8 +60,7 @@ def make_input_json():
                         'path': os.path.join(parent, m, s, 'TSV-TIFF', i),
                         'type': 'EDX' if i.split(".")[-1] == 'tsv' else 'BSE',
                         'maskName': i.split(".")[0]
-                        if i.split(".")[-1].lower() == "tif" and
-                           i.split(".")[0] not in ["inca", "aztec"]
+                        if i.split(".")[0] in mask_names
                         else None
                         } for i in
                        os.listdir(os.path.join(parent, m, s, 'TSV-TIFF'))
@@ -68,7 +69,7 @@ def make_input_json():
                      } for s in os.listdir(os.path.join(parent, m)) if
                     'soi' in s
                     ]
-                  } for m in matDirs if m in ['BFS', 'FAF']
+                  } for m in matDirs if m in ["BG2", "BFS", "FAF"]
                  ]
               }
 

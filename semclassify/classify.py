@@ -252,6 +252,6 @@ if __name__ == "__main__":
   sm = SuperModel(
     "/Users/joshuaarnold/Documents/MyApps/sem-classify/output/store.h5",
     ['BFS','FAF'],
-    ['Al','Ca','Fe','K','Na','S','Si'],
+    ['Al','Ca','Fe','K','Mg','Na','S','Si'],
     ['BFS'])
   sm.train_all_models()

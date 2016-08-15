@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from skimage import io
 import os
+from itertools import chain
 
 class Material():
   def __init__(self, name, path, sites):
@@ -17,12 +18,26 @@ class Material():
     self.path = path
     self.sites = sites
 
+  def get_mask_names(self):
+    """ Collects all mask names for each site.
+
+    return: unique set of mask names
+    """
+    return list(set(chain.from_iterable(site.get_mask_names()
+                                        for site in self.sites)) - {None})
+
   def get_dataframe(self):
+    """ Returns a DataFrame for each Material
+    :param None
+    :return df: pandas DataFrame associated with the Material."""
     with stopwatch("creating DataFrame for material %s" % self.name):
       df = pd.DataFrame()
       for s in self.sites:
         df = df.append(s.get_image_block())
       df['material'] = self.name
+
+      # if a mask is not present, then assume false
+      df[self.get_mask_names()] = df[self.get_mask_names()].fillna(False)
       return df
 
   def __str__(self):
@@ -64,22 +79,30 @@ class Site():
     df['site'] = self.name
     return df
 
+  def get_mask_names(self):
+    """ Gets the set of mask names for each image
+
+    :return set of mask names as strings
+    """
+    return set(i.maskName for i in self.images)
+
+
   def __str__(self):
     return self.name + "-->" + ",".join(str(x) for x in self.images)
 
 
 class Image():
-  def __init__(self, name, path, imgType, maskName=None):
+  def __init__(self, name, path, img_type, maskName=None):
     """ Creates a new channel of information, i.e. BSE or EDX image/text file
 
     :param name: unique identifier of this Image within the scope of the parent
     Site
     :param path: filepath
-    :param imgType: tag, e.g. 'EDX', 'BSE' or 'MASK'
+    :param img_type: tag, e.g. 'EDX', 'BSE' or 'MASK'
     """
     self.name = name.capitalize()
     self.path = path
-    self.imgType = imgType.upper()
+    self.img_type = img_type.upper()
     # Discern image format
     _, imgFormat = os.path.splitext(self.path)
     self.imgFormat = imgFormat.lower()
@@ -148,9 +171,28 @@ def write_db(ctrlFilePath, storePath):
       for mat in matList:
         chunk = mat.get_dataframe()
         print(chunk.info())
+        print(chunk.head())
         store.append(mat.name, chunk, data_columns=True, index=True)
 
 
-if __name__ == '__main__':
+def overwrite_db():
   make_input_json()
   write_db('../input_data/ctrl_00.json','../output/store.h5')
+
+
+def explore_db():
+  df = pd.read_hdf("../output/store.h5",
+                   "FAF",
+                   where=[
+                     "site='soi_002'",
+                     "FAF==True"
+
+
+  print(df.info())
+  print(df.head())
+  print(df.count())
+
+
+if __name__ == '__main__':
+  # overwrite_db()
+  explore_db()
