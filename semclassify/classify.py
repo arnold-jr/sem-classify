@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy import stats
 from semclassify.helpers import stopwatch
 from semclassify.transformers import ColumnSelectorTransformer
 from sklearn.pipeline import Pipeline, FeatureUnion
@@ -20,7 +21,7 @@ import dill as pickle
 
 
 class SuperModel():
-  def __init__(self, store_path, tables, feat_cols, label_cols):
+  def __init__(self, store_path, tables=None, feat_cols=None, label_cols=None):
     """ Constructs an instance of SuperModel which associates a data store,
     data columns of interest, and a set of models to describe the data.
 
@@ -163,30 +164,48 @@ class SuperModel():
     df_out.to_csv(test_fpath.replace(".csv","_results.csv"))
 
 
-  def train_model(self, chunk, model_name, model_values, all_classes=None):
+  def train_model(self, chunk, model_name, model_instance):
+    """ Trains a single model with specified data, name, and model instance.
 
+    :param chunk: pandas DataFrame containing data
+    :param model_name: identifier for the model type
+    :param model_instance: specification of the model instance and its
+    parameters.
+    :return trained model
+    """
     feature_steps = [
       ('features', FeatureUnion([
         ('numeric', ColumnSelectorTransformer(self.feat_cols)),
       ])
        ),
-      ('scaler', StandardScaler()),
     ]
 
     feature_pipe = Pipeline(feature_steps)
 
     model_pipe = Pipeline(feature_steps +
-                          [('model', model_values['model'])]
+                          [('model', model_instance['model'])]
                           )
 
-    # TODO: combine all labels into a single label
-    y = chunk.loc[:, self.label_cols].as_matrix().ravel()
 
-    cv = StratifiedShuffleSplit(y, n_iter=5, test_size=0.3)
+    # Here, combine labels into a single series
+    def one_hot_decode(row):
+      try:
+        return list(row).index(True)
+      except:
+        return -1
 
-    if False:
-      param_grid = model_values.get('param_grid',None)
-      if param_grid is not None:
+    chunk.loc[:,'y'] = chunk.loc[:, self.label_cols]\
+      .apply(one_hot_decode, axis=1)
+
+    chunk = chunk.loc[chunk.y != -1, :]
+    y = chunk.y.as_matrix().ravel()
+    print(np.unique(y))
+
+
+    if True:
+      cv = StratifiedShuffleSplit(y, n_iter=10, train_size=0.9)
+      param_grid = model_instance.get('param_grid',None)
+      if False and param_grid is not None:
         clf_CV = GridSearchCV(model_pipe,
                               param_grid={'model__'+k:v
                                           for k,v in
@@ -194,41 +213,47 @@ class SuperModel():
                               cv=cv,
                               n_jobs=1)
         clf_CV.fit(chunk, y)
-        print(model_values['model'])
+        print(model_instance['model'])
         print('Model: %s\t Score: %f\t' % (model_name, clf_CV.best_score_))
         print('Parameters: ', clf_CV.best_params_)
       else:
-        scores = cross_val_score(model_pipe, chunk, y, cv=cv, n_jobs=-1)
+        scores = cross_val_score(model_pipe, chunk, y, cv=cv, n_jobs=1)
         print('Model: %s\t Score: %f\t' % (model_name, scores.mean()))
+        model_pipe.fit(chunk, y)
+        freq = stats.itemfreq(model_pipe.predict(chunk))
+        for f in freq:
+          print(f[0], f[1])
+        return model_pipe
     else:
+      clf = model_instance['model']
+
+      if len(y) < 1:
+        return clf
+
       X_tform = feature_pipe.fit_transform(chunk)
+
       X_train, X_test, y_train, y_test = train_test_split(X_tform, y,
-                                                          test_size=0.3,
+                                                          train_size=0.7,
                                                           random_state=42)
-      clf = model_values['model']
-      clf.partial_fit(X_train, y_train, classes=all_classes)
+      clf.partial_fit(X_train, y_train,
+                      classes=list(range(len(self.label_cols))))
       scores = clf.score(X_test, y_test)
       print('Model: %s\t Score: %f\t' % (model_name, scores.mean()))
       return clf
 
 
-  def train_all_models(self, model_names=('gnb')):
+  def train_all_models(self, model_names=('gnb'), where=None):
     """ Trains all the classifiers specified by their model name.
 
     :param model_names: list of model code names as strings
     :return None
     """
-    # where = 'site="soi_001"'
-    where = None
     with pd.HDFStore(self.store_path, mode='r') as store:
-      df_labels = store.select(self.tables[0],
-                               where=where,
-                               columns=self.label_cols
-                               )
-      # TODO: combine labels into a single series
-      all_classes = np.unique(df_labels)
-      n_rows = len(df_labels.index)
-      chunksize = n_rows // 10
+      n_rows = len(store.select_as_coordinates(self.tables[0],
+                                               where=where)
+                   )
+
+      chunksize = n_rows // 1
 
       for chunk in store.select(self.tables[0],
                                 chunksize=chunksize,
@@ -242,7 +267,7 @@ class SuperModel():
               dict(model=self.train_model(chunk,
                                           modelName,
                                           modelValues,
-                                          all_classes)
+                                          )
                    )
             )
 
@@ -251,7 +276,10 @@ class SuperModel():
 if __name__ == "__main__":
   sm = SuperModel(
     "/Users/joshuaarnold/Documents/MyApps/sem-classify/output/store.h5",
-    ['BFS','FAF'],
-    ['Al','Ca','Fe','K','Mg','Na','S','Si'],
-    ['BFS'])
-  sm.train_all_models()
+    tables=['BG2'],
+    feat_cols=['Al','BSE','Ca','Fe','K','Mg','Na','S','Si'],
+    label_cols=['BFS','FAF','HYD','ILL','POR','QS'],
+    )
+  sm.train_all_models(
+    model_names=['rfc'],
+    where=['site=="soi_001" | site=="soi_002" | site=="soi_011"'])

@@ -3,6 +3,7 @@ from semclassify.helpers import stopwatch, get_input_json, make_input_json
 import numpy as np
 import pandas as pd
 from skimage import io
+import mahotas as mh
 import os
 from itertools import chain
 
@@ -32,8 +33,12 @@ class Material():
     :return df: pandas DataFrame associated with the Material."""
     with stopwatch("creating DataFrame for material %s" % self.name):
       df = pd.DataFrame()
+      acc = 0
       for s in self.sites:
-        df = df.append(s.get_image_block())
+        chunk = s.get_image_block()
+        chunk.index += acc
+        acc += len(chunk.index)
+        df = df.append(chunk)
       df['material'] = self.name
 
       # if a mask is not present, then assume false
@@ -72,7 +77,7 @@ class Site():
     rr, cc = np.mgrid[0:maxRes[0], 0:maxRes[1]]
     imgBlock = {'imgRow': rr.astype(np.uint16).flatten(),
                 "imgCol": cc.astype(np.uint16).flatten()}
-    imgBlock.update({k:np.resize(v, maxRes).flatten()
+    imgBlock.update({k:mh.imresize(v, maxRes, order=3).flatten()
                      for k,v in imgs.items()})
     df = pd.DataFrame(imgBlock)
 
@@ -184,9 +189,8 @@ def explore_db():
   df = pd.read_hdf("../output/store.h5",
                    "FAF",
                    where=[
-                     "site='soi_002'",
-                     "FAF==True"
-
+                     "site='soi_004'",
+                   ])
 
   print(df.info())
   print(df.head())
@@ -194,5 +198,5 @@ def explore_db():
 
 
 if __name__ == '__main__':
-  # overwrite_db()
-  explore_db()
+  overwrite_db()
+  # explore_db()

@@ -26,7 +26,7 @@ def get_best_clustering(df, n_clusters_range=range(2,10)):
   scores = []
   batch_size = 100
 
-  X = StandardScaler().fit_transform(df.fillna(df.mean()).as_matrix())
+  X = StandardScaler().fit_transform(df.fillna(0.0).as_matrix())
   for n_clusters in n_clusters_range:
     mbk = MiniBatchKMeans(init='random', n_clusters=n_clusters,
                           batch_size=batch_size,
