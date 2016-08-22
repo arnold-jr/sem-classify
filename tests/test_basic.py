@@ -41,6 +41,5 @@ class StoreTestSuite(unittest.TestCase):
     self.assertIsInstance(df,sc.pd.DataFrame())
 
 
-
 if __name__ == '__main__':
   unittest.main()

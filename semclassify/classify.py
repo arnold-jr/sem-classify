@@ -4,7 +4,7 @@ from scipy import stats
 from semclassify.helpers import stopwatch
 from semclassify.transformers import ColumnSelectorTransformer
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.linear_model import (SGDClassifier,
                                   Perceptron,
                                   PassiveAggressiveClassifier)
@@ -77,22 +77,7 @@ class SuperModel():
       ),
         param_grid={'min_samples_split': list(range(2, 5))}
       ),
-      rfc=dict(model=RandomForestClassifier(
-        n_estimators=10,
-        criterion='gini',
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        min_weight_fraction_leaf=0.0,
-        max_features='auto',
-        max_leaf_nodes=None,
-        bootstrap=True,
-        oob_score=False,
-        random_state=None,
-        verbose=0,
-        warm_start=False,
-        class_weight=None,
-      ),
+      rfc=dict(model=RandomForestClassifier(),
         param_grid={"min_samples_split": list(range(2, 5))}
       ),
       etc=dict(model=ExtraTreesClassifier(
@@ -176,6 +161,7 @@ class SuperModel():
     feature_steps = [
       ('features', FeatureUnion([
         ('numeric', ColumnSelectorTransformer(self.feat_cols)),
+        ('scaler', MinMaxScaler())
       ])
        ),
     ]
@@ -203,7 +189,7 @@ class SuperModel():
 
 
     if True:
-      cv = StratifiedShuffleSplit(y, n_iter=10, train_size=0.9)
+      cv = StratifiedShuffleSplit(y, n_iter=10, train_size=0.7)
       param_grid = model_instance.get('param_grid',None)
       if False and param_grid is not None:
         clf_CV = GridSearchCV(model_pipe,
@@ -217,7 +203,7 @@ class SuperModel():
         print('Model: %s\t Score: %f\t' % (model_name, clf_CV.best_score_))
         print('Parameters: ', clf_CV.best_params_)
       else:
-        scores = cross_val_score(model_pipe, chunk, y, cv=cv, n_jobs=1)
+        scores = cross_val_score(model_pipe, chunk, y, cv=cv, n_jobs=-1)
         print('Model: %s\t Score: %f\t' % (model_name, scores.mean()))
         model_pipe.fit(chunk, y)
         freq = stats.itemfreq(model_pipe.predict(chunk))
@@ -233,7 +219,7 @@ class SuperModel():
       X_tform = feature_pipe.fit_transform(chunk)
 
       X_train, X_test, y_train, y_test = train_test_split(X_tform, y,
-                                                          train_size=0.7,
+                                                          train_size=0.9,
                                                           random_state=42)
       clf.partial_fit(X_train, y_train,
                       classes=list(range(len(self.label_cols))))
@@ -283,3 +269,4 @@ if __name__ == "__main__":
   sm.train_all_models(
     model_names=['rfc'],
     where=['site=="soi_001" | site=="soi_002" | site=="soi_011"'])
+  sm.pickle_models(['rfc'])
