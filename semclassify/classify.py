@@ -3,8 +3,9 @@ import numpy as np
 from scipy import stats
 from semclassify.helpers import stopwatch
 from semclassify.transformers import ColumnSelectorTransformer
+from semclassify.plots import plot_confusion_matrix
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder
 from sklearn.linear_model import (SGDClassifier,
                                   Perceptron,
                                   PassiveAggressiveClassifier)
@@ -39,6 +40,11 @@ class SuperModel():
         raise ValueError("Incorrect parameter for SuperModel.label_cols")
     except:
       raise
+
+    self.label_encoder = LabelEncoder()
+    self.label_encoder.fit(self.label_cols)
+    print(self.label_encoder.classes_)
+    print(self.label_encoder.transform(self.label_cols))
 
     self.modelChoices = dict(
       lda=dict(model=LinearDiscriminantAnalysis(
@@ -132,21 +138,6 @@ class SuperModel():
 
 
 
-  def get_trained_model(self, model_name):
-    with open(self.get_pickled_name(model_name), 'rb') \
-        as pckl_input:
-      return pickle.load(pckl_input)
-
-
-  def test_models(self, model_names, test_fpath):
-    df_out = pd.DataFrame()
-    for model_name in model_names:
-      df = self.create_data_frame(test_fpath, train=False)
-      clf = self.get_trained_model(model_name)
-      df_out[model_name] = clf.predict(df)
-
-    print(df_out)
-    df_out.to_csv(test_fpath.replace(".csv","_results.csv"))
 
 
   def train_model(self, chunk, model_name, model_instance):
@@ -159,11 +150,8 @@ class SuperModel():
     :return trained model
     """
     feature_steps = [
-      ('features', FeatureUnion([
         ('numeric', ColumnSelectorTransformer(self.feat_cols)),
-        ('scaler', MinMaxScaler())
-      ])
-       ),
+        ('scaler', StandardScaler()),
     ]
 
     feature_pipe = Pipeline(feature_steps)
@@ -176,20 +164,18 @@ class SuperModel():
     # Here, combine labels into a single series
     def one_hot_decode(row):
       try:
-        return list(row).index(True)
+        return row.index[list(row).index(True)]
       except:
-        return -1
+        return "None"
 
-    chunk.loc[:,'y'] = chunk.loc[:, self.label_cols]\
+    chunk.loc[:, 'y'] = chunk.loc[:, self.label_cols] \
       .apply(one_hot_decode, axis=1)
 
-    chunk = chunk.loc[chunk.y != -1, :]
-    y = chunk.y.as_matrix().ravel()
-    print(np.unique(y))
-
+    chunk = chunk.loc[chunk.y != "None", :]
+    y = self.label_encoder.transform(chunk.y.as_matrix().ravel())
 
     if True:
-      cv = StratifiedShuffleSplit(y, n_iter=10, train_size=0.7)
+      cv = StratifiedShuffleSplit(y, n_iter=10, train_size=0.7, random_state=42)
       param_grid = model_instance.get('param_grid',None)
       if False and param_grid is not None:
         clf_CV = GridSearchCV(model_pipe,
@@ -203,12 +189,18 @@ class SuperModel():
         print('Model: %s\t Score: %f\t' % (model_name, clf_CV.best_score_))
         print('Parameters: ', clf_CV.best_params_)
       else:
-        scores = cross_val_score(model_pipe, chunk, y, cv=cv, n_jobs=-1)
-        print('Model: %s\t Score: %f\t' % (model_name, scores.mean()))
+        if True:
+          scores = cross_val_score(model_pipe, chunk, y, cv=cv, n_jobs=-1)
+          print('Model: %s\t Score: %f\t' % (model_name, scores.mean()))
+
         model_pipe.fit(chunk, y)
         freq = stats.itemfreq(model_pipe.predict(chunk))
         for f in freq:
           print(f[0], f[1])
+
+        plot_confusion_matrix(y,
+                              model_pipe.predict(chunk),
+                              label_encoder=self.label_encoder)
         return model_pipe
     else:
       clf = model_instance['model']
@@ -257,16 +249,47 @@ class SuperModel():
                    )
             )
 
+  def get_trained_model(self, model_name):
+    """ Returns pickled trained model
+
+    :param model_name: string specifiying unique model name
+    :return sklearn classifier object"""
+    with open(self.get_pickled_name(model_name), 'rb') \
+        as pckl_input:
+      return pickle.load(pckl_input)
+
+
+  def get_model_prediction(self, clf, where=None):
+    with stopwatch("getting model predictions"):
+      with pd.HDFStore(self.store_path, mode='a') as store:
+        n_rows = len(store.select_as_coordinates(self.tables[0],
+                                                 where=where)
+                     )
+
+        chunksize = n_rows // 1
+
+        new_table_name = self.tables[0] + "_pred"
+        if new_table_name in store.keys():
+          store.remove(new_table_name)
+
+        for chunk in store.select(self.tables[0],
+                                  chunksize=chunksize,
+                                  ):
+          indexer = chunk.ANH
+          y_pred = clf.predict(chunk.loc[indexer,self.feat_cols])
+          chunk.loc[indexer, "predicted_label"] = \
+            self.label_encoder.inverse_transform(y_pred)
+          freq = stats.itemfreq(self.label_encoder.inverse_transform(y_pred))
+          for f in freq:
+            print(f[0], f[1])
+
+          store.append(new_table_name,
+                       chunk,
+                       format='table',
+                       append=False)
+          return y_pred
+
 
 
 if __name__ == "__main__":
-  sm = SuperModel(
-    "/Users/joshuaarnold/Documents/MyApps/sem-classify/output/store.h5",
-    tables=['BG2'],
-    feat_cols=['Al','BSE','Ca','Fe','K','Mg','Na','S','Si'],
-    label_cols=['BFS','FAF','HYD','ILL','POR','QS'],
-    )
-  sm.train_all_models(
-    model_names=['rfc'],
-    where=['site=="soi_001" | site=="soi_002" | site=="soi_011"'])
-  sm.pickle_models(['rfc'])
+  pass

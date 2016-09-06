@@ -73,13 +73,22 @@ class Site():
     """
     imgs = {i.name if i.maskName is None else i.maskName:i.get_image()
             for i in self.images}
+    mask_names = [i.maskName for i in self.images
+                  if i.maskName is not None]
     maxRes = max((i.shape for i in imgs.values()))
     rr, cc = np.mgrid[0:maxRes[0], 0:maxRes[1]]
     imgBlock = {'imgRow': rr.astype(np.uint16).flatten(),
                 "imgCol": cc.astype(np.uint16).flatten()}
-    imgBlock.update({k:mh.imresize(v, maxRes, order=3).flatten()
-                     for k,v in imgs.items()})
+    for k, v in imgs.items():
+      if v.dtype != np.bool and v.shape != maxRes:
+        imgBlock.update({k: mh.imresize(v, maxRes, order=3).flatten()
+                     })
+      else:
+        imgBlock.update({k: v.flatten()})
+
     df = pd.DataFrame(imgBlock)
+
+    df.loc[:, mask_names] = df.loc[:, mask_names].fillna(False).astype(np.bool)
 
     df['site'] = self.name
     return df
@@ -180,23 +189,22 @@ def write_db(ctrlFilePath, storePath):
         store.append(mat.name, chunk, data_columns=True, index=True)
 
 
-def overwrite_db():
+def write_db_from_json():
   make_input_json()
   write_db('../input_data/ctrl_00.json','../output/store.h5')
 
 
 def explore_db():
   df = pd.read_hdf("../output/store.h5",
-                   "FAF",
-                   where=[
-                     "site='soi_004'",
-                   ])
+                   "BG2_pred",
+                  )
 
   print(df.info())
   print(df.head())
-  print(df.count())
+  print(sum(df.index))
 
 
 if __name__ == '__main__':
-  overwrite_db()
-  # explore_db()
+  write_db_from_json()
+  explore_db()
+  pass

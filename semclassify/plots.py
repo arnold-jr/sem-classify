@@ -54,7 +54,8 @@ class PaletteController():
 def plot_confusion_matrix(y_true,
                           y_pred,
                           title="Normalized confusion matrix",
-                          cmap=plt.cm.Blues):
+                          cmap=plt.cm.Blues,
+                          label_encoder=None):
   """ Plots the confusion matrix for a set of labels and predictions
 
   :param y_true: the matrix of integer class labels
@@ -66,15 +67,22 @@ def plot_confusion_matrix(y_true,
   cm = confusion_matrix(y_true, y_pred)
   cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 
-  df_cm = pd.DataFrame(cm_normalized, columns=np.unique(y_true),
-                       index=np.unique(y_true))
+  labels = np.unique(y_true)
+  print(labels)
+
+  if label_encoder is not None:
+    labels = label_encoder.inverse_transform(labels)
+  print(labels)
+
+  df_cm = pd.DataFrame(cm_normalized, columns=labels, index=labels)
 
   print('Normalized confusion matrix')
   print(df_cm)
 
   plt.figure()
 
-  plt.imshow(df_cm.as_matrix(), interpolation='nearest',
+  plt.imshow(df_cm.as_matrix(),
+             interpolation='nearest',
              cmap=cmap)
   plt.title(title)
   plt.colorbar()

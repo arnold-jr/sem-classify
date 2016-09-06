@@ -121,19 +121,30 @@ def hotel2(X1, X2):
 
 
 def get_cluster_labels():
-  df = pd.read_hdf("../output/store.h5",
-                   key="FAF",
-                   where=["FAF==True"],
-                   columns=["Al","Ca","Fe","K","Mg","Na","S","Si"])
+  key = "FAF"
+  feat_cols=['Al', 'Ca', 'Fe', 'K', 'Mg', 'Na', 'S', 'Si']
+  store_path = \
+    "/Users/joshuaarnold/Documents/MyApps/sem-classify/output/store.h5"
 
-  df.loc[:,'kmeans'] = get_best_clustering(df, n_clusters_range=range(2,10))
-  df_full = pd.read_hdf("../output/store.h5",
-                        key="FAF",
-                        where=None).join(df.kmeans)
-  print(df.index[-1], df_full.index[-1])
-  print(df_full.head(10))
+  with pd.HDFStore(store_path, mode='a') as store:
+    chunk_full = store.select(key=key)
+    chunk = chunk_full.loc[chunk_full.FAF == True, feat_cols]
+    chunk.loc[:,'FAF_kmeans_label'] = \
+      get_best_clustering(chunk, n_clusters_range=range(2,10))
+    chunk_full = chunk_full.join(chunk.FAF_kmeans_label)
+    print(chunk_full.head(10))
+
+    new_table_name = key
+    if new_table_name in store.keys():
+      store.remove(new_table_name)
+
+    store.append(new_table_name,
+                 chunk_full,
+                 format='table',
+                 append=False)
 
 
 if __name__ == "__main__":
   get_cluster_labels()
   # hotel2(df.loc[df.kmeans == 0, columns], df.loc[df.kmeans == 1, columns])
+  pass
